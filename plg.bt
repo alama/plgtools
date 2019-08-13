@@ -1,0 +1,134 @@
+
+typedef float f32;
+typedef uint16 u16;
+typedef uint32 u32;
+typedef ubyte u8;
+
+typedef struct {
+    char magic[4]; // PLG0
+  
+    // version/game?
+    // 00040001/00030001/00020001 - P5
+    // 00000002 - PQ2
+    // 20000000 - P5D
+    u32 _field_04;
+  
+    u32 obj_data_offset; // header size
+    u32 vert_data_offset;
+    u32 faceidx_data_offset;
+  
+    if (obj_data_offset == 0x38) {
+        u32 file_size;
+        u32 _field_18;     // 00?
+        u32 obj_count;
+        u32 vert_count;    
+        u32 _field_24;     // matches one of the vert counts in the obj list
+        u32 faceidx_count;
+        u32 _field_2c;     // 00
+        u32 _field_30;     // 00
+        u32 _field_34;     // 00
+    } else {
+        u16 obj_count;
+        u16 vert_count;
+        u16 _field_18;     // matches one of the vert counts in the obj list
+        u16 faceidx_count;
+        u32 _field_1c;     // 00
+    }
+} PLGHeader;
+
+typedef struct (int size) {
+    // offset from the obj entry
+    u32 vert_data_offset;
+    u32 faceidx_data_offset;
+
+    if (size == 0x48)
+        u32 eof_offset; // obj pos + this offset == eof
+
+    // for all "layers" combined
+    u16 vert_count;
+    u16 faceidx_count;
+
+    if (size == 0x48)
+        u32 _field_10; // 00
+  
+    // connect each n verts
+    u16 n_gon;
+    
+    // 00 or 04
+    u16 _field_16;
+
+    // viewport? viewbox? global offsets?
+    f32 xmin;
+    f32 ymin;
+    f32 xmax;
+    f32 ymax;
+
+    // obj name
+    char name[0x20];
+} PLGObject;
+
+typedef struct {
+  u8 r;
+  u8 g;
+  u8 b;
+  u8 a;
+  
+  f32 x;
+  f32 y;
+  
+  // layer?
+  // known values: 00000000, 00010000
+  // appears to be a byte array
+  u32 _field_0c;
+} PLGPoint;
+
+typedef struct {
+    PLGHeader header;
+    
+    local int size = 0x48;
+    if (header.obj_data_offset == 0x20)
+        size = 0x40;
+
+    local int i;
+    local int o;
+    local int vdo = header.vert_data_offset - header.obj_data_offset;
+    local int fdo = header.faceidx_data_offset - header.obj_data_offset;
+    
+    for (i = 0; i < header.obj_count; i++) {
+        typedef struct {
+            PLGObject obj(size) <bgcolor=cRed>;
+
+            o = size * i + header.obj_data_offset;
+            
+            if (obj.vert_data_offset == 0) {
+                FSeek(o + vdo);
+            } else {
+                FSeek(o + obj.vert_data_offset);
+            }
+            
+            PLGPoint vert_data[obj.vert_count] <bgcolor=cBlue>;
+
+            if (obj.faceidx_data_offset == 0) {
+                FSeek(o + fdo);
+            } else {
+                FSeek(o + obj.faceidx_data_offset);
+            }
+
+            short faceidx_data[obj.faceidx_count] <bgcolor=cGreen>;
+
+            vdo += (obj.vert_count * 0x10 - size);
+            fdo += (obj.faceidx_count * 0x02 - size);
+        } ObjectWrapper;
+        ObjectWrapper ow;
+        FSeek(o + size);
+    }
+
+    //PLGObject objs(size)[header.obj_count];
+    //PLGPoint vert_data[header.vert_count];
+    //u16 faceidx_data[header.faceidx_count];
+} PLGFile;
+
+DisplayFormatHex();
+LittleEndian();
+
+PLGFile f;
